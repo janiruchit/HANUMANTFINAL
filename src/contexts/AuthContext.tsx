@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase";
 
 export type UserRole = 'admin' | 'student';
 
@@ -30,62 +32,63 @@ export const useAuth = () => {
   return ctx;
 };
 
-const MOCK_USERS: Record<string, User & { password: string }> = {
-  'admin@hanumant.com': {
-    id: '1',
-    name: 'Admin',
-    email: 'admin@hanumant.com',
-    role: 'admin',
-    password: 'H@numant2290',
-  },
-  'rahul@student.com': {
-    id: '2',
-    name: 'Rahul Sharma',
-    email: 'rahul@student.com',
-    role: 'student',
-    roomNumber: '204',
-    mobile: '9876543210',
-    parentMobile: '9876543211',
-    address: 'Pune, Maharashtra',
-    password: 'student123',
-  },
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 🔐 LOGIN (Firebase)
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const found = MOCK_USERS[email];
-    if (found && found.password === password) {
-      const { password: _, ...userData } = found;
-      setUser(userData);
-    } else {
-      throw new Error('Invalid credentials');
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      setUser({
+        id: firebaseUser.uid,
+        name: firebaseUser.email || "User",
+        email: firebaseUser.email || "",
+        role: email.includes("admin") ? "admin" : "student",
+      });
+
+    } catch (error) {
+      throw new Error("Invalid email or password");
     }
     setIsLoading(false);
   };
 
+  // 🆕 SIGNUP (Firebase)
   const signup = async (data: Partial<User> & { password: string }) => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: data.name || '',
-      email: data.email || '',
-      role: 'student',
-      mobile: data.mobile,
-      parentMobile: data.parentMobile,
-      address: data.address,
-      roomNumber: 'TBA',
-    };
-    setUser(newUser);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        data.email || "",
+        data.password
+      );
+
+      const firebaseUser = userCredential.user;
+
+      setUser({
+        id: firebaseUser.uid,
+        name: data.name || "User",
+        email: data.email || "",
+        role: "student",
+        mobile: data.mobile,
+        parentMobile: data.parentMobile,
+        address: data.address,
+        roomNumber: "TBA",
+      });
+
+    } catch (error) {
+      throw new Error("Signup failed");
+    }
     setIsLoading(false);
   };
 
-  const logout = () => setUser(null);
+  // 🚪 LOGOUT
+  const logout = () => {
+    setUser(null);
+  };
 
   return (
     <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>
